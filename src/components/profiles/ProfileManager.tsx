@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Paper, Button, Group, Text, Modal, TextInput, Textarea as MantineTextarea, Select as MantineSelect, Badge, Title, Stack, SimpleGrid } from '@mantine/core';
+import { Paper, Button, Group, Text, Modal, TextInput, Textarea as MantineTextarea, Select as MantineSelect, Badge, Title, Stack, SimpleGrid, Alert, Kbd, ThemeIcon, Container } from '@mantine/core';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useToast } from '@/hooks/use-toast';
 import { Profile, LLMProvider, LLMConfig, HotkeyConfig } from '@/lib/types';
-import { Plus, Edit3, Trash2, Sparkles, Bot, Zap, Settings } from 'lucide-react';
+import { IconPlus, IconEdit, IconTrash, IconSparkles, IconRobot, IconBolt, IconSettings, IconKeyboard, IconMicrophone, IconInfoCircle, IconAlertCircle } from '@tabler/icons-react';
 
 // Genkit-supported model IDs and display names
 const GENKIT_GOOGLE_MODELS = [
@@ -59,14 +59,23 @@ export function ProfileManager() {
     name: '',
     prompt: '',
     provider: '' as LLMProvider,
-    model: ''
+    model: '',
+    hotkey: '',
   });
   const [isMounted, setIsMounted] = useState(false);
+  const [recordingHotkey, setRecordingHotkey] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Sync hotkey config to Electron
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      window.electronAPI.setHotkeyConfig(hotkeyConfig);
+    }
+  }, [hotkeyConfig]);
 
   // Fetch Anthropic models dynamically when provider or API key changes
   useEffect(() => {
@@ -127,7 +136,8 @@ export function ProfileManager() {
       name: '',
       prompt: '',
       provider: '' as LLMProvider,
-      model: ''
+      model: '',
+      hotkey: '',
     });
     setEditingProfile(null);
   };
@@ -138,11 +148,13 @@ export function ProfileManager() {
   };
 
   const openEditDialog = (profile: Profile) => {
+    const existingHotkey = hotkeyConfig.find(h => h.profileId === profile.id);
     setFormData({
       name: profile.name,
       prompt: profile.prompt,
       provider: profile.provider,
-      model: profile.model
+      model: profile.model,
+      hotkey: existingHotkey?.combination || '',
     });
     setEditingProfile(profile);
     setIsDialogOpen(true);
@@ -152,43 +164,50 @@ export function ProfileManager() {
     e.preventDefault();
     
     if (!formData.name.trim() || !formData.prompt.trim() || !formData.provider || !formData.model) {
-      toast("Please fill in all fields.", {
+      toast("Missing Information", {
+        description: "Please fill in all required fields.",
         type: "error"
       });
       return;
     }
 
-    // Check if API key exists for the selected provider
-    const providerConfig = llmConfig[formData.provider];
-    if (!providerConfig?.apiKey) {
-      toast(`Please configure your ${LLM_PROVIDERS.find(p => p.value === formData.provider)?.label} API key in Settings first.`, {
-        type: "error"
-      });
-      return;
-    }
+    const profileId = editingProfile?.id || Date.now().toString();
+    const newProfile: Profile = {
+      id: profileId,
+      name: formData.name.trim(),
+      prompt: formData.prompt.trim(),
+      provider: formData.provider,
+      model: formData.model
+    };
 
     if (editingProfile) {
-      // Update existing profile
-      const updatedProfiles = profiles.map(profile =>
-        profile.id === editingProfile.id
-          ? { ...profile, ...formData }
-          : profile
-      );
-      setProfiles(updatedProfiles);
-      toast(`"${formData.name}" has been updated successfully.`, {
-        type: "success"
+      setProfiles(prev => prev.map(p => p.id === editingProfile.id ? newProfile : p));
+    } else {
+      setProfiles(prev => [...prev, newProfile]);
+    }
+
+    // Handle hotkey configuration
+    if (formData.hotkey) {
+      const newHotkeyConfig: HotkeyConfig = {
+        id: `hotkey-${profileId}`,
+        profileId: profileId,
+        combination: formData.hotkey,
+        keyLabel: formData.name,
+      };
+
+      setHotkeyConfig(prev => {
+        const filtered = prev.filter(h => h.profileId !== profileId);
+        return [...filtered, newHotkeyConfig];
       });
     } else {
-      // Create new profile
-      const newProfile: Profile = {
-        id: Date.now().toString(),
-        ...formData
-      };
-      setProfiles([...profiles, newProfile]);
-      toast(`"${formData.name}" has been created successfully.`, {
-        type: "success"
-      });
+      // Remove hotkey if cleared
+      setHotkeyConfig(prev => prev.filter(h => h.profileId !== profileId));
     }
+
+    toast(editingProfile ? "Profile Updated" : "Profile Created", {
+      description: `Profile "${formData.name}" has been ${editingProfile ? 'updated' : 'created'} successfully.`,
+      type: "success"
+    });
 
     setIsDialogOpen(false);
     resetForm();
@@ -206,7 +225,8 @@ export function ProfileManager() {
     const updatedHotkeys = hotkeyConfig.filter(hotkey => hotkey.profileId !== profileId);
     setHotkeyConfig(updatedHotkeys);
 
-    toast(`"${profileToDelete.name}" and its associated hotkeys have been removed.`, {
+    toast("Profile Deleted", {
+      description: `Profile "${profileToDelete.name}" and its associated hotkeys have been removed.`,
       type: "success"
     });
   };
@@ -225,6 +245,104 @@ export function ProfileManager() {
     return hotkey ? hotkey.combination : null;
   };
 
+  const startRecording = () => {
+    setRecordingHotkey(true);
+    setFormData(prev => ({ ...prev, hotkey: '' }));
+    
+    let recordingTimeout: NodeJS.Timeout;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Build the combination string step by step
+      let combination = '';
+      
+      // Add modifiers first
+      if (e.ctrlKey || e.metaKey) {
+        combination += (e.metaKey ? 'Cmd' : 'Ctrl') + '+';
+      }
+      if (e.altKey) {
+        combination += 'Alt+';
+      }
+      if (e.shiftKey) {
+        combination += 'Shift+';
+      }
+      
+      // Only process non-modifier keys
+      const isModifierKey = ['Control', 'Meta', 'Alt', 'Shift', 'ControlLeft', 'ControlRight', 'MetaLeft', 'MetaRight', 'AltLeft', 'AltRight', 'ShiftLeft', 'ShiftRight'].includes(e.code || e.key);
+      
+      if (!isModifierKey) {
+        // Use e.key for the main key, but clean it up
+        let mainKey = e.key;
+        
+        // Handle special cases
+        if (mainKey.length === 1) {
+          mainKey = mainKey.toUpperCase();
+        } else {
+          // Map special keys to readable names
+          const keyMap: { [key: string]: string } = {
+            ' ': 'Space',
+            'Enter': 'Enter',
+            'Escape': 'Esc',
+            'Backspace': 'Backspace',
+            'Tab': 'Tab',
+            'Delete': 'Del',
+            'ArrowUp': 'Up',
+            'ArrowDown': 'Down',
+            'ArrowLeft': 'Left',
+            'ArrowRight': 'Right'
+          };
+          mainKey = keyMap[mainKey] || mainKey;
+        }
+        
+        combination += mainKey;
+        
+        // Only accept combinations with at least one modifier
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
+          console.log('Captured combination:', combination);
+          setFormData(prev => ({ ...prev, hotkey: combination }));
+          setRecordingHotkey(false);
+          document.removeEventListener('keydown', handleKeyDown);
+          if (recordingTimeout) clearTimeout(recordingTimeout);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Auto-stop recording after 10 seconds
+    recordingTimeout = setTimeout(() => {
+      setRecordingHotkey(false);
+      document.removeEventListener('keydown', handleKeyDown);
+    }, 10000);
+  };
+
+  const handleHotkeyChange = (newHotkey: string | null) => {
+    setFormData({ ...formData, hotkey: newHotkey || '' });
+  };
+
+  const handleStartRecording = () => {
+    startRecording();
+  };
+
+  const handleStopRecording = () => {
+    setRecordingHotkey(false);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (recordingHotkey) {
+      const hotkey = `${e.ctrlKey ? 'Ctrl+' : ''}${e.altKey ? 'Alt+' : ''}${e.shiftKey ? 'Shift+' : ''}${e.code}`;
+      handleHotkeyChange(hotkey);
+      handleStopRecording();
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [recordingHotkey]);
+
   if (!isMounted) {
     return (
       <div className="container mx-auto p-6 space-y-8">
@@ -242,21 +360,49 @@ export function ProfileManager() {
   }
 
   return (
-    <div>
+    <Container size="xl" py="xl">
       <Group justify="center" mb="md">
-        <Bot size={32} className="text-primary" />
+        <IconRobot size={32} className="text-primary" />
       </Group>
-      <Title order={1} ta="center" fw={900}>
-        Rephrasing Profiles
-      </Title>
-      <Text size="lg" c="dimmed" ta="center" style={{ maxWidth: 600, margin: '0 auto' }}>
-        Create and manage custom rephrasing profiles with different prompts and AI models to transform your text in unique ways.
-      </Text>
-      <SimpleGrid cols={3} spacing="lg" mb="xl">
+      
+      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+        <Title order={1} fw={900} mb="sm">
+          Rephrasing Profiles
+        </Title>
+        <Text size="lg" c="dimmed" style={{ maxWidth: 600, margin: '0 auto 1rem auto' }}>
+          Create and manage custom rephrasing profiles with different prompts and AI models to transform your text in unique ways.
+        </Text>
+        <Button 
+          onClick={() => {
+            setFormData({
+              name: '',
+              prompt: '',
+              provider: '' as LLMProvider,
+              model: '',
+              hotkey: '',
+            });
+            setEditingProfile(null);
+            setIsDialogOpen(true);
+          }}
+          variant="gradient" 
+          gradient={{ from: 'forest.6', to: 'teal.6', deg: 90 }} 
+          leftSection={<IconPlus size={18} />}
+          size="md"
+        >
+          Create Profile
+        </Button>
+      </div>
+
+      <SimpleGrid 
+        cols={{ base: 1, sm: 2, md: 3 }} 
+        spacing="lg" 
+        mb="xl"
+        style={{ maxWidth: '100%' }}
+      >
         <Paper shadow="md" radius="md" p="lg" style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)', border: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ padding: 8, background: 'rgba(59, 130, 246, 0.1)', borderRadius: 8 }}>
-              <Sparkles className="h-5 w-5" color="#3b82f6" />
+              <IconSparkles className="h-5 w-5" color="#3b82f6" />
             </div>
             <div>
               <p style={{ fontSize: 14, fontWeight: 500, color: '#3b82f6' }}>Total Profiles</p>
@@ -267,7 +413,7 @@ export function ProfileManager() {
         <Paper shadow="md" radius="md" p="lg" style={{ background: 'linear-gradient(135deg, #c6f6d5 0%, #9bc2e6 100%)', border: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ padding: 8, background: 'rgba(16, 185, 129, 0.1)', borderRadius: 8 }}>
-              <Zap className="h-5 w-5" color="#10b981" />
+              <IconBolt className="h-5 w-5" color="#10b981" />
             </div>
             <div>
               <p style={{ fontSize: 14, fontWeight: 500, color: '#10b981' }}>Hotkey Profiles</p>
@@ -278,7 +424,7 @@ export function ProfileManager() {
         <Paper shadow="md" radius="md" p="lg" style={{ background: 'linear-gradient(135deg, #fef9c3 0%, #fde68a 100%)', border: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ padding: 8, background: 'rgba(253, 224, 71, 0.1)', borderRadius: 8 }}>
-              <Settings className="h-5 w-5" color="#eab308" />
+              <IconSettings className="h-5 w-5" color="#eab308" />
             </div>
             <div>
               <p style={{ fontSize: 14, fontWeight: 500, color: '#eab308' }}>LLM Providers</p>
@@ -295,7 +441,7 @@ export function ProfileManager() {
             <Text c="dimmed" size="sm">
               {editingProfile
                 ? 'Update your rephrasing profile settings.'
-                : 'Create a custom rephrasing profile with specific prompts and AI models.'}
+                : 'Create a custom rephrasing profile with specific prompts and AI models to transform your text in unique ways.'}
             </Text>
             <TextInput
               label="Profile Name"
@@ -312,23 +458,21 @@ export function ProfileManager() {
               minRows={4}
               required
             />
-            <Group grow>
+            <Group gap="md" grow>
               <MantineSelect
-                label="AI Provider"
+                label="Provider"
+                placeholder="Select provider"
                 data={LLM_PROVIDERS.map(provider => ({ value: provider.value, label: provider.label }))}
                 value={formData.provider}
-                onChange={(value: string | null) => setFormData({ ...formData, provider: value as LLMProvider, model: '' })}
-                placeholder="Select provider"
+                onChange={(value: string | null) => setFormData({ ...formData, provider: value as LLMProvider || '', model: '' })}
                 required
               />
               <MantineSelect
                 label="Model"
                 data={
                   formData.provider === 'anthropic'
-                    // Show fetched Anthropic models (or fallback hardcoded ones)
                     ? anthropicModels.map(model => ({ value: model.id, label: model.label }))
                     : formData.provider === 'google'
-                    // Only show Genkit-supported Google models
                     ? GENKIT_GOOGLE_MODELS.map(model => ({ value: model.id, label: model.label }))
                     : (LLM_PROVIDERS.find(p => p.value === formData.provider)?.models.map(model => ({ value: model.id, label: model.label })) ?? [])
                 }
@@ -342,11 +486,66 @@ export function ProfileManager() {
                 <Text color="red" size="xs" mt={2}>{modelFetchError}</Text>
               )}
             </Group>
+
+            {/* Hotkey Configuration Section */}
+            <Stack gap="sm">
+              <Group gap="sm">
+                <ThemeIcon size="sm" variant="light" color="teal">
+                  <IconKeyboard size={16} />
+                </ThemeIcon>
+                <Text size="sm" fw={500}>Hotkey Configuration (Optional)</Text>
+              </Group>
+
+              <div>
+                <Text size="sm" fw={500} mb="xs">Key Combination</Text>
+                <Group gap="sm">
+                  <TextInput
+                    placeholder="Press 'Record' and then your key combination"
+                    value={formData.hotkey}
+                    readOnly
+                    style={{ flex: 1 }}
+                    rightSection={formData.hotkey ? <Kbd size="xs">{formData.hotkey}</Kbd> : null}
+                  />
+                  <Button
+                    variant={recordingHotkey ? 'filled' : 'light'}
+                    color={recordingHotkey ? 'red' : 'forest'}
+                    onClick={handleStartRecording}
+                    disabled={recordingHotkey}
+                    leftSection={<IconMicrophone size={16} />}
+                    size="sm"
+                  >
+                    {recordingHotkey ? 'Recording...' : 'Record'}
+                  </Button>
+                  {formData.hotkey && (
+                    <Button
+                      variant="subtle"
+                      color="gray"
+                      onClick={() => setFormData({ ...formData, hotkey: '' })}
+                      size="sm"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </Group>
+                {recordingHotkey && (
+                  <Alert 
+                    icon={<IconInfoCircle size={16} />}
+                    title="Recording Keys"
+                    color="blue"
+                    variant="light"
+                    mt="xs"
+                  >
+                    Press your key combination now (e.g., Ctrl+R or Ctrl+Shift+R). It will be captured immediately.
+                  </Alert>
+                )}
+              </div>
+            </Stack>
+
             <Group justify="right" mt="md">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" variant="gradient" gradient={{ from: 'green', to: 'teal', deg: 90 }}>
+              <Button type="submit" variant="gradient" gradient={{ from: 'forest.6', to: 'teal.6', deg: 90 }}>
                 {editingProfile ? 'Update Profile' : 'Create Profile'}
               </Button>
             </Group>
@@ -358,14 +557,14 @@ export function ProfileManager() {
         <Paper shadow="md" radius="md" p="lg" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #e6f4ea 100%)', border: 0 }}>
           <Group justify="center">
             <Badge color="gray" size="xl" radius="xl" variant="light">
-              <Bot size={32} />
+              <IconRobot size={32} />
             </Badge>
           </Group>
           <Title order={3}>No profiles yet</Title>
           <Text c="dimmed" maw={320} mx="auto">
             Create your first rephrasing profile to get started with AI-powered text transformation.
           </Text>
-          <Button onClick={openCreateDialog} variant="gradient" gradient={{ from: 'green', to: 'teal', deg: 90 }} leftSection={<Plus size={18} />}>
+          <Button onClick={openCreateDialog} variant="gradient" gradient={{ from: 'forest.6', to: 'pastel.6', deg: 90 }} leftSection={<IconPlus size={18} />}>
             Create Your First Profile
           </Button>
         </Paper>
@@ -394,10 +593,10 @@ export function ProfileManager() {
                 </Group>
                 <Text size="sm" c="dimmed" mb="md" lineClamp={3}>{profile.prompt}</Text>
                 <Group gap="sm">
-                  <Button variant="outline" size="xs" onClick={() => openEditDialog(profile)} leftSection={<Edit3 size={14} />}>
+                  <Button variant="outline" size="xs" onClick={() => openEditDialog(profile)} leftSection={<IconEdit size={14} />}>
                     Edit
                   </Button>
-                  <Button variant="outline" color="red" size="xs" onClick={() => handleDelete(profile.id)} leftSection={<Trash2 size={14} />}>
+                  <Button variant="outline" color="red" size="xs" onClick={() => handleDelete(profile.id)} leftSection={<IconTrash size={14} />}>
                     Delete
                   </Button>
                 </Group>
@@ -406,6 +605,6 @@ export function ProfileManager() {
           })}
         </Group>
       )}
-    </div>
+    </Container>
   );
 }

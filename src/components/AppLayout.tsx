@@ -1,6 +1,5 @@
 'use client';
 import Link from 'next/link';
-
 import { usePathname } from 'next/navigation';
 import {
   AppShell,
@@ -29,12 +28,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
 
   const navItems = [
-    {
-      href: '/',
-      label: 'Rephraser',
-      icon: IconSparkles,
-      color: 'forest.6',
-    },
     {
       href: '/profiles',
       label: 'Profiles',
@@ -74,22 +67,20 @@ export function AppLayout({ children }: AppLayoutProps) {
       }}
     >
       <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Burger
-              opened={opened}
-              onClick={toggle}
-              hiddenFrom="sm"
-              size="sm"
-            />
-            <Group gap="xs">
-              <ThemeIcon size="lg" variant="light" color="forest.6">
-                <IconFileText size={20} />
-              </ThemeIcon>
-              <Title order={3} c="forest.8">
-                Rephrasely
-              </Title>
-            </Group>
+        <Group h="100%" px="md">
+          <Burger
+            opened={opened}
+            onClick={toggle}
+            hiddenFrom="sm"
+            size="sm"
+          />
+          <Group gap="xs">
+            <ThemeIcon size="lg" variant="light" color="blue">
+              <IconFileText size={20} />
+            </ThemeIcon>
+            <Title order={3}>
+              Rephrasely
+            </Title>
           </Group>
         </Group>
       </AppShell.Header>

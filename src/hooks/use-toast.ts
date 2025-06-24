@@ -1,15 +1,16 @@
-import { toast } from "sonner";
+import { notifications } from '@mantine/notifications';
 
 export const useToast = () => {
   return {
     toast: (message: string, options?: { description?: string; type?: 'success' | 'error' | 'info' }) => {
-      if (options?.type === 'error') {
-        toast.error(message, { description: options?.description });
-      } else if (options?.type === 'success') {
-        toast.success(message, { description: options?.description });
-      } else {
-        toast(message, { description: options?.description });
-      }
+      const color = options?.type === 'error' ? 'red' : options?.type === 'success' ? 'green' : 'blue';
+      
+      notifications.show({
+        title: message,
+        message: options?.description || '',
+        color: color,
+        autoClose: 5000,
+      });
     },
   };
 };

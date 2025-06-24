@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useGlobalHotkeyListener } from '../../renderer/useGlobalHotkeyListener';
 import {
   Container,
   Title,
@@ -23,7 +22,6 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { Profile, LLMConfig, HotkeyConfig } from '@/lib/types';
-import { rephraseText } from '@/ai/flows/rephrase-text';
 import {
   IconSparkles,
   IconCopy,
@@ -47,7 +45,7 @@ export function RephraserTool() {
   
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
+  const [selectedProfileId, setSelectedProfileId] = useLocalStorageState<string>('rephrasely-selected-profile', '');
   const [isRephrasing, setIsRephrasing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -56,7 +54,6 @@ export function RephraserTool() {
     setIsMounted(true);
   }, []);
 
-  // --- ELECTRON GLOBAL HOTKEY HANDLER ---
   const selectedProfile = profiles.find(p => p.id === selectedProfileId);
   const hasApiKey = selectedProfile ? llmConfig[selectedProfile.provider]?.apiKey : false;
 
@@ -94,16 +91,27 @@ export function RephraserTool() {
 
     setIsRephrasing(true);
     try {
-      const result = await rephraseText({
-        text: inputText,
-        prompt: selectedProfile.prompt,
-        provider: selectedProfile.provider,
-        model: selectedProfile.model,
-        apiKey: llmConfig[selectedProfile.provider]?.apiKey || '',
+      const response = await fetch('/api/rephraseText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: inputText,
+          prompt: selectedProfile.prompt,
+          apiKey: llmConfig[selectedProfile.provider]?.apiKey || '',
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const result = data.rephrasedText;
       
-      setOutputText(result.rephrasedText);
-      if (returnOutput) return result.rephrasedText;
+      setOutputText(result);
+      if (returnOutput) return result;
       notifications.show({
         title: 'Success!',
         message: 'Text rephrased successfully',
@@ -123,29 +131,6 @@ export function RephraserTool() {
     }
     if (returnOutput) return outputText;
   }, [inputText, selectedProfile, llmConfig, setOutputText, setIsRephrasing, hasApiKey, outputText]);
-
-  const handleElectronHotkey = useCallback(async (combination: string) => {
-    if (typeof window === 'undefined' || !window.electronAPI) return;
-    // Find hotkey config
-    const hotkey = hotkeyConfig.find(h => h.combination === combination);
-    if (!hotkey) return;
-    const profile = profiles.find(p => p.id === hotkey.profileId);
-    if (!profile) return;
-    setSelectedProfileId(profile.id);
-    // Read clipboard text
-    const clipboardText = await window.electronAPI.readClipboard();
-    setInputText(clipboardText);
-    // Wait for state update
-    setTimeout(async () => {
-      const result = await handleRephrase(true); // pass true to indicate electron
-      // After rephrase, copy outputText to clipboard
-      if (result && typeof result === 'string' && window.electronAPI) {
-        await window.electronAPI.writeClipboard(result);
-      }
-    }, 100);
-  }, [hotkeyConfig, profiles, handleRephrase]);
-
-  useGlobalHotkeyListener(handleElectronHotkey);
 
   const getProviderColor = (provider: string) => {
     switch (provider) {

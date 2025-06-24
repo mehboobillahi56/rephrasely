@@ -1,5 +1,3 @@
-'use server';
-
 import { generateWithFallback } from '../genkit';
 import { RephraseTextInput, RephraseTextOutput } from '@/lib/schemas';
 import type { RephraseTextInput as RephraseTextInputType, RephraseTextOutput as RephraseTextOutputType } from '@/lib/schemas';

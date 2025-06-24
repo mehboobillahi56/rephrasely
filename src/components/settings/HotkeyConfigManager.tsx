@@ -22,7 +22,6 @@ import {
   Kbd,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { setElectronHotkeyConfig } from '../../../renderer/electronHotkeyBridge';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { Profile, HotkeyConfig } from '@/lib/types';
 import {
@@ -41,7 +40,7 @@ import {
 
 export function HotkeyConfigManager() {
   const [profiles] = useLocalStorageState<Profile[]>('rephrasely-profiles', []);
-  const [hotkeyConfigs, setHotkeyConfigs] = useLocalStorageState<HotkeyConfig[]>('rephrasely-hotkey-configs', []);
+  const [hotkeyConfigs, setHotkeyConfigs] = useLocalStorageState<HotkeyConfig[]>('rephrasely-hotkey-config', []);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -54,14 +53,33 @@ export function HotkeyConfigManager() {
 
   useEffect(() => {
     setIsMounted(true);
-  }, []);
-
-  // Sync hotkey config to Electron
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.electronAPI) {
-      setElectronHotkeyConfig(hotkeyConfigs);
+    
+    // Add a default test hotkey if none exist and profiles are available
+    if (hotkeyConfigs.length === 0 && profiles.length > 0) {
+      const defaultHotkey: HotkeyConfig = {
+        id: 'default-test-hotkey',
+        profileId: profiles[0].id,
+        combination: 'Ctrl+Shift+R',
+        keyLabel: 'Quick Rephrase (Default)',
+      };
+      setHotkeyConfigs([defaultHotkey]);
     }
-  }, [hotkeyConfigs]);
+  }, [profiles, hotkeyConfigs, setHotkeyConfigs]);
+
+  // Sync hotkey config to Electron with debouncing
+  useEffect(() => {
+    if (!isMounted) return; // Don't sync until component is mounted
+    
+    const timeoutId = setTimeout(() => {
+      if (typeof window !== 'undefined' && window.electronAPI) {
+        console.log('[HotkeyManager] Syncing hotkey configs to Electron:', hotkeyConfigs);
+        // Send hotkey configs to Electron main process
+        window.electronAPI.setHotkeyConfig(hotkeyConfigs);
+      }
+    }, 100); // 100ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [hotkeyConfigs, isMounted]);
 
   const resetForm = () => {
     setFormData({

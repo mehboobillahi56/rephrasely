@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "main": "electron/main.js",
-  "homepage": "./",
+  "homepage": "http://./",
   "scripts": {
     "start": "next start",
     "dev": "next dev",
     "build": "next build",
     "create-icons": "node scripts/create-icons.js",
-    "electron:dev": "cross-env NODE_ENV=development concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "postinstall": "electron-builder install-app-deps",
+    "electron:dev": "cross-env NODE_ENV=development concurrently \"next dev -p 3000\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:pack": "npm run build && electron-builder --publish=never",
     "electron:dist": "npm run build && electron-builder --publish=always",
     "pack:win": "npm run build && electron-builder --win",
@@ -35,19 +36,30 @@
       {
         "from": "out",
         "to": "app",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
+    "npmRebuild": true,
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/icon.icns"
@@ -55,12 +67,10 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
-          "arch": ["x64", "ia32"]
-        },
-        {
-          "target": "portable",
-          "arch": ["x64", "ia32"]
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico"
@@ -69,11 +79,15 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.png"
@@ -91,7 +105,6 @@
     }
   },
   "dependencies": {
-    "@genkit-ai/googleai": "^1.12.0",
     "@mantine/core": "^8.1.0",
     "@mantine/form": "^8.1.0",
     "@mantine/hooks": "^8.1.0",
@@ -107,14 +120,9 @@
     "@tabler/icons-react": "^3.34.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "genkit": "^1.12.0",
-    "genkitx-anthropic": "^0.22.0",
-    "lucide-react": "^0.515.0",
     "next": "15.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "robotjs": "^0.6.0",
-    "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.25.64"
@@ -127,14 +135,17 @@
     "@types/react-dom": "^19",
     "concurrently": "^8.2.0",
     "cross-env": "^7.0.3",
-    "electron": "^30.0.0",
+    "electron": "^28.3.3",
     "electron-builder": "^24.13.3",
     "electron-rebuild": "^3.2.9",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
     "tailwindcss": "^4",
-    "tw-animate-css": "^1.3.4",
     "typescript": "^5",
     "wait-on": "^7.0.1"
-  }
+  },
+  "description": "A powerful AI-powered desktop application for rephrasing text with system-wide hotkey support. Built with Next.js, Electron, and multiple AI providers.",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
