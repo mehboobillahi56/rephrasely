@@ -7,16 +7,11 @@
   "scripts": {
     "start": "next start",
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && next export -o out",
+    "dist": "electron-builder",
     "create-icons": "node scripts/create-icons.js",
     "postinstall": "electron-builder install-app-deps",
     "electron:dev": "cross-env NODE_ENV=development concurrently \"next dev -p 3000\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:pack": "npm run build && electron-builder --publish=never",
-    "electron:dist": "npm run build && electron-builder --publish=always",
-    "pack:win": "npm run build && electron-builder --win",
-    "pack:mac": "npm run build && electron-builder --mac",
-    "pack:linux": "npm run build && electron-builder --linux",
-    "pack:all": "npm run build && electron-builder --mac --win --linux",
     "electron:start": "electron .",
     "lint": "next lint"
   },
@@ -29,8 +24,8 @@
     "files": [
       "out/**/*",
       "electron/**/*",
-      "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/**/*"
     ],
     "extraResources": [
       {

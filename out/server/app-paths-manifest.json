@@ -1,0 +1,6 @@
+{
+  "/api/getAnthropicModels/route": "app/api/getAnthropicModels/route.js",
+  "/api/rephraseText/route": "app/api/rephraseText/route.js",
+  "/profiles/page": "app/profiles/page.js",
+  "/settings/page": "app/settings/page.js"
+}
