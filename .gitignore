@@ -1,56 +1,73 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dependencies
+node_modules/
+.next/
+out/
+dist/
+build/
+release/
+*.tsbuildinfo
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Environment variables
+.env*.local
+.env
+.env.development
+.env.production
+.env.test
 
-# testing
-/coverage
-
-# next.js
-/.next/
-# /out/  # Keep out/ directory for static exports
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# vercel
-.vercel
+# System Files
+.DS_Store
+Thumbs.db
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# Electron
-/dist/
-/release/
-*.dmg
-*.zip
+# Electron-builder output
+dist_electron/
+win-unpacked/
 *.exe
+*.dmg
 *.AppImage
-*.deb
-*.rpm
 *.snap
 
-# Electron Builder
-/app-builds/
-/electron-builder-output/
+# Local development
+.cache/
+.temp/
+.tmp/
+.turbo/
+*.bat
+
+# Testing
+coverage/
+.nyc_output/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.test
+.env.production
